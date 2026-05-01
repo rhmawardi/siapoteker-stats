@@ -1,6 +1,7 @@
-const CACHE_NAME = 'ig-analytics-v1';
+const CACHE_NAME = 'ig-analytics-v2';
 const ASSETS = [
   '/',
+  '/index.html',
   '/manifest.json',
   'https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Sora:wght@600;700;800&display=swap',
 ];
@@ -43,12 +44,29 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // App shell — cache-first
+  // HTML/navigation — network-first supaya update UI terbaru langsung terambil
+  if (e.request.mode === 'navigate' || e.request.destination === 'document') {
+    e.respondWith(
+      fetch(e.request)
+        .then(res => {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then(c => c.put('/index.html', clone));
+          return res;
+        })
+        .catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+
+  // App shell static assets — stale-while-revalidate ringan
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request).then(res => {
-      const clone = res.clone();
-      caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
-      return res;
-    })).catch(() => caches.match('/index.html'))
+    caches.match(e.request).then(cached => {
+      const networkFetch = fetch(e.request).then(res => {
+        const clone = res.clone();
+        caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+        return res;
+      });
+      return cached || networkFetch;
+    }).catch(() => caches.match('/index.html'))
   );
 });
