@@ -1,0 +1,23 @@
+{
+  "name": "SiApoteker Analytics",
+  "short_name": "SiApoteker",
+  "description": "Realtime Instagram Analytics Dashboard untuk @siapoteker",
+  "start_url": "/ig-analytics.html",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#080d14",
+  "theme_color": "#00e5c0",
+  "lang": "id",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": [
+    "utilities",
+    "productivity"
+  ]
+}
