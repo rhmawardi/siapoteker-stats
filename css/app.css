@@ -112,7 +112,7 @@
       color: var(--text);
     }
     .brand-name span { color: var(--teal); }
-    .header-actions { display: flex; align-items: center; gap: 12px; }
+    .header-actions { display: flex; align-items: center; gap: 10px; }
     .live-badge {
       display: flex;
       align-items: center;
@@ -129,6 +129,28 @@
       width: 5px; height: 5px; border-radius: 50%;
       background: var(--teal);
       animation: pulse 1.5s infinite;
+    }
+    .export-actions {
+      display: flex;
+      gap: 6px;
+    }
+    .btn-export {
+      height: 32px;
+      padding: 0 9px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: var(--surface2);
+      color: var(--text2);
+      font-family: 'Sora', sans-serif;
+      font-size: 10px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-export:hover {
+      border-color: var(--teal);
+      color: var(--teal);
+      background: rgba(0,229,192,0.08);
     }
     .btn-settings {
       background: var(--surface2);

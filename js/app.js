@@ -114,6 +114,36 @@ function setApiStatus(status, msg = '') {
   msgEl.textContent = msg;
 }
 
+function todayStamp() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function csvCell(value) {
+  const text = String(value ?? '');
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function downloadTextFile(filename, content, type = 'text/plain;charset=utf-8') {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // ════════════════════════════════════════════════
 //  INSTAGRAM GRAPH API CALLS
 // ════════════════════════════════════════════════
@@ -1006,6 +1036,145 @@ function buildContentMatrix(benchmarks) {
   });
 }
 
+function buildReportRows(mediaArr = allMedia) {
+  const weighted = calculateWeightedEngagement(mediaArr);
+  const summary = [
+    ['Report Date', new Date().toLocaleString('id-ID')],
+    ['Account', currentProfile?.username ? '@' + currentProfile.username : '@siapoteker'],
+    ['Followers', readNumber(currentProfile?.followers_count)],
+    ['Media Count', mediaArr.length],
+    ['Total Reach', weighted.reach],
+    ['Total Views', weighted.views],
+    ['Total Engagements', weighted.engagements],
+    ['Weighted ER', formatRate(weighted.primary)],
+    ['ER by Reach', formatRate(weighted.reachEr)],
+    ['ER by Views', formatRate(weighted.viewsEr)],
+    ['ER by Followers', formatRate(weighted.followersEr)],
+    ['Save Rate', formatRate(weighted.saveRate)],
+    ['Share Rate', formatRate(weighted.shareRate)],
+  ];
+
+  const media = mediaArr.map(item => {
+    const stats = getMediaStats(item);
+    const health = calculateContentHealth(item, getContentBenchmarks(mediaArr));
+    return {
+      date: new Date(item.timestamp).toLocaleDateString('id-ID'),
+      type: item.media_type,
+      caption: summarizeCaption(item.caption || ''),
+      likes: stats.likes,
+      comments: stats.comments,
+      saves: stats.saves,
+      shares: stats.shares,
+      reach: stats.reach,
+      views: stats.views,
+      engagements: stats.engagements,
+      erReach: formatRate(stats.erReach),
+      erViews: formatRate(stats.erViews),
+      erFollowers: formatRate(stats.erFollowers),
+      health: `${health.score} ${health.label}`,
+      permalink: item.permalink || '',
+    };
+  });
+
+  return { summary, media, weighted };
+}
+
+function exportReportCsv() {
+  const mediaArr = allMedia.length ? allMedia : [];
+  if (!mediaArr.length) {
+    showToast('⚠️ Belum ada data konten untuk diexport');
+    return;
+  }
+
+  const report = buildReportRows(mediaArr);
+  const lines = [];
+  lines.push('Summary');
+  report.summary.forEach(row => lines.push(row.map(csvCell).join(',')));
+  lines.push('');
+  lines.push('Content Performance');
+  lines.push([
+    'Date', 'Type', 'Caption', 'Likes', 'Comments', 'Saves', 'Shares', 'Reach', 'Views',
+    'Engagements', 'ER by Reach', 'ER by Views', 'ER by Followers', 'Health Score', 'Permalink'
+  ].map(csvCell).join(','));
+  report.media.forEach(row => {
+    lines.push([
+      row.date, row.type, row.caption, row.likes, row.comments, row.saves, row.shares,
+      row.reach, row.views, row.engagements, row.erReach, row.erViews, row.erFollowers,
+      row.health, row.permalink,
+    ].map(csvCell).join(','));
+  });
+
+  downloadTextFile(`siapoteker-report-${todayStamp()}.csv`, lines.join('\r\n'), 'text/csv;charset=utf-8');
+  showToast('✅ CSV report berhasil dibuat');
+}
+
+function exportReportPdf() {
+  const mediaArr = allMedia.length ? allMedia : [];
+  if (!mediaArr.length) {
+    showToast('⚠️ Belum ada data konten untuk diexport');
+    return;
+  }
+
+  const report = buildReportRows(mediaArr);
+  const topRows = report.media.slice(0, 12);
+  const win = window.open('', '_blank');
+  if (!win) {
+    showToast('⚠️ Pop-up diblokir. Izinkan pop-up untuk export PDF.');
+    return;
+  }
+
+  win.document.write(`
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+      <meta charset="UTF-8" />
+      <title>SiApoteker IG Analytics Report</title>
+      <style>
+        body { font-family: Arial, sans-serif; color: #14202b; margin: 32px; }
+        h1 { margin: 0; font-size: 24px; }
+        .muted { color: #637083; font-size: 12px; margin-top: 4px; }
+        .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 22px 0; }
+        .card { border: 1px solid #d8e0ea; border-radius: 10px; padding: 12px; }
+        .label { font-size: 11px; color: #637083; margin-bottom: 6px; }
+        .value { font-size: 20px; font-weight: 800; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        th, td { border-bottom: 1px solid #e6ecf2; padding: 8px; text-align: left; vertical-align: top; }
+        th { background: #f5f8fb; color: #405064; }
+        .caption { max-width: 220px; }
+        @media print { body { margin: 18mm; } .no-print { display: none; } }
+      </style>
+    </head>
+    <body>
+      <button class="no-print" onclick="window.print()" style="float:right;padding:8px 12px">Print / Save PDF</button>
+      <h1>SiApoteker IG Analytics Report</h1>
+      <div class="muted">Generated ${escapeHtml(new Date().toLocaleString('id-ID'))} · ${escapeHtml(currentProfile?.username ? '@' + currentProfile.username : '@siapoteker')}</div>
+      <div class="grid">
+        <div class="card"><div class="label">Weighted ER</div><div class="value">${formatRate(report.weighted.primary)}</div></div>
+        <div class="card"><div class="label">Total Reach</div><div class="value">${fmt(report.weighted.reach)}</div></div>
+        <div class="card"><div class="label">Save Rate</div><div class="value">${formatRate(report.weighted.saveRate)}</div></div>
+        <div class="card"><div class="label">Share Rate</div><div class="value">${formatRate(report.weighted.shareRate)}</div></div>
+      </div>
+      <h2>Content Performance</h2>
+      <table>
+        <thead><tr><th>Date</th><th>Type</th><th>Caption</th><th>Reach</th><th>Views</th><th>Eng.</th><th>ER Reach</th><th>Health</th></tr></thead>
+        <tbody>
+          ${topRows.map(row => `
+            <tr>
+              <td>${escapeHtml(row.date)}</td><td>${escapeHtml(row.type)}</td><td class="caption">${escapeHtml(row.caption)}</td>
+              <td>${escapeHtml(fmt(row.reach))}</td><td>${escapeHtml(fmt(row.views))}</td><td>${escapeHtml(fmt(row.engagements))}</td>
+              <td>${escapeHtml(row.erReach)}</td><td>${escapeHtml(row.health)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </body>
+    </html>
+  `);
+  win.document.close();
+  win.focus();
+  showToast('✅ PDF report siap dicetak');
+}
+
 function setExecutiveSummary(status, title, desc, points = {}) {
   const statusEl = document.getElementById('exec-status');
   document.getElementById('exec-title').textContent = title;
@@ -1361,6 +1530,9 @@ document.getElementById('btn-refresh-content').addEventListener('click', () => {
   btn.classList.add('spinning');
   loadAllData().finally(() => btn.classList.remove('spinning'));
 });
+
+document.getElementById('btn-export-csv').addEventListener('click', exportReportCsv);
+document.getElementById('btn-export-pdf').addEventListener('click', exportReportPdf);
 
 // ════════════════════════════════════════════════
 //  AUTO REFRESH (5 minutes)
