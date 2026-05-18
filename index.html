@@ -67,7 +67,7 @@
     <div class="brand-name">IG <span>Analytics</span></div>
   </div>
   <div class="header-actions">
-    <span class="live-badge"><span class="live-dot"></span>LIVE</span>
+    <span class="live-badge" id="live-badge"><span class="live-dot"></span><span id="live-badge-text">LIVE</span></span>
     <div class="export-actions" aria-label="Export report">
       <button class="btn-export" id="btn-export-pdf" title="Export PDF">PDF</button>
       <button class="btn-export" id="btn-export-csv" title="Export CSV">CSV</button>
@@ -225,21 +225,12 @@
         <div class="chart-title">⏰ Jam Terbaik Posting</div>
         <span class="chart-period" id="best-hour-summary">—</span>
       </div>
-      <div class="heatmap-hours" id="heatmap-hours"></div>
+      <div class="heatmap-days" id="heatmap-days"></div>
       <div class="heatmap" id="heatmap"></div>
-      <div class="heatmap-labels">
-        <span class="heatmap-label">Sen</span>
-        <span class="heatmap-label">Sel</span>
-        <span class="heatmap-label">Rab</span>
-        <span class="heatmap-label">Kam</span>
-        <span class="heatmap-label">Jum</span>
-        <span class="heatmap-label">Sab</span>
-        <span class="heatmap-label">Min</span>
-      </div>
     </div>
 
     <div class="disclaimer">
-      Data diperbarui dari Instagram Graph API<br>
+      Sumber data: <span id="data-source-label">Instagram Graph API</span><br>
       Terakhir diperbarui: <span id="last-updated">—</span>
     </div>
 

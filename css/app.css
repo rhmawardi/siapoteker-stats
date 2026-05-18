@@ -968,20 +968,32 @@
     .demo-pct { font-size: 10px; color: var(--text2); width: 28px; text-align: right; }
 
     /* ── HOURS HEATMAP ── */
-    .heatmap-hours,
-    .heatmap { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-    .heatmap-hours { margin-top: 8px; margin-bottom: 4px; }
-    .heat-hour-label {
-      height: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 8px;
-      color: var(--text3);
-      font-weight: 700;
-    }
-    .heat-cell {
-      aspect-ratio: 1;
+      .heatmap-days,
+      .heatmap {
+        display: grid;
+        grid-template-columns: 30px repeat(7, minmax(0, 1fr));
+        gap: 4px;
+      }
+      .heatmap-days { margin-top: 8px; margin-bottom: 4px; }
+      .heat-axis-spacer,
+      .heat-day-label,
+      .heat-hour-label {
+        height: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 8px;
+        color: var(--text3);
+        font-weight: 700;
+      }
+      .heat-hour-label {
+        height: auto;
+        min-height: 28px;
+        justify-content: flex-end;
+        padding-right: 4px;
+      }
+      .heat-cell {
+        aspect-ratio: 1;
       border-radius: 4px;
       background: var(--surface3);
       transition: all 0.2s;
@@ -993,11 +1005,9 @@
       font-weight: 700;
     }
     .heat-cell.h1 { background: rgba(0,229,192,0.15); }
-    .heat-cell.h2 { background: rgba(0,229,192,0.3); }
-    .heat-cell.h3 { background: rgba(0,229,192,0.55); }
-    .heat-cell.h4 { background: rgba(0,229,192,0.8); }
-    .heatmap-labels { display: flex; justify-content: space-between; margin-top: 6px; }
-    .heatmap-label { font-size: 9px; color: var(--text3); }
+      .heat-cell.h2 { background: rgba(0,229,192,0.3); }
+      .heat-cell.h3 { background: rgba(0,229,192,0.55); }
+      .heat-cell.h4 { background: rgba(0,229,192,0.8); }
 
     /* ── REFRESH BTN ── */
     .btn-refresh {

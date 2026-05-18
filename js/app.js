@@ -114,6 +114,13 @@ function setApiStatus(status, msg = '') {
   msgEl.textContent = msg;
 }
 
+function setDataMode(mode) {
+  const source = document.getElementById('data-source-label');
+  const liveText = document.getElementById('live-badge-text');
+  if (source) source.textContent = mode === 'demo' ? 'Mode demo (bukan data Instagram real)' : 'Instagram Graph API';
+  if (liveText) liveText.textContent = mode === 'demo' ? 'DEMO' : 'LIVE';
+}
+
 function todayStamp() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -412,6 +419,10 @@ function sumInsightValues(metric) {
   return (metric?.values || []).reduce((sum, item) => sum + readNumber(item.value), 0);
 }
 
+function hasInsightValues(metric) {
+  return Array.isArray(metric?.values) && metric.values.length > 0;
+}
+
 function readFollowBreakdown(metric) {
   let followers = null;
 
@@ -470,8 +481,10 @@ function renderKPIs(insights, profile = null) {
 
   const viewsVal = sumInsightValues(viewsMetric);
   const reachVal = sumInsightValues(reach);
-  let fcNew = sumInsightValues(fc);
-  let fcSub = '7 hari terakhir';
+  const hasAccountViews = hasInsightValues(viewsMetric);
+  const hasAccountReach = hasInsightValues(reach);
+  let fcNew = hasInsightValues(fc) ? sumInsightValues(fc) : null;
+  let fcSub = hasInsightValues(fc) ? '7 hari terakhir (net follower_count)' : 'belum tersedia dari API';
 
   const followsNew = readFollowBreakdown(follows);
   if (followsNew !== null) {
@@ -480,15 +493,18 @@ function renderKPIs(insights, profile = null) {
   }
 
   const snapshotDelta = readFollowerSnapshotDelta(profile);
-  if (!fcNew && snapshotDelta !== null) {
+  if (fcNew === null && snapshotDelta !== null) {
     fcNew = snapshotDelta;
     fcSub = 'sejak update terakhir';
   }
 
-  document.getElementById('kpi-impressions').textContent = fmt(viewsVal);
-  document.getElementById('kpi-impressions-delta').textContent = viewsMetric?.name === 'views' ? 'dari account views' : 'fallback impressions';
-  document.getElementById('kpi-reach').textContent = fmt(reachVal);
-  document.getElementById('kpi-new-followers').textContent = (fcNew >= 0 ? '+' : '') + fmt(fcNew);
+  document.getElementById('kpi-impressions').textContent = hasAccountViews ? fmt(viewsVal) : '—';
+  document.getElementById('kpi-impressions-delta').textContent = hasAccountViews
+    ? (viewsMetric?.name === 'views' ? '7 hari dari account views' : '7 hari fallback impressions')
+    : 'account views tidak tersedia';
+  document.getElementById('kpi-reach').textContent = hasAccountReach ? fmt(reachVal) : '—';
+  document.getElementById('kpi-reach-delta').textContent = hasAccountReach ? '7 hari dari account reach' : 'account reach tidak tersedia';
+  document.getElementById('kpi-new-followers').textContent = fcNew === null ? '—' : (fcNew >= 0 ? '+' : '') + fmt(fcNew);
   document.getElementById('kpi-followers-sub').textContent = fcSub;
 
   // Reach bar
@@ -496,6 +512,8 @@ function renderKPIs(insights, profile = null) {
   document.getElementById('reach-pct').textContent = pctVal + '%';
   document.getElementById('reach-bar').style.width = pctVal + '%';
   document.getElementById('reach-target-lbl').textContent = 'Target: ' + fmt(config.targetReach);
+
+  return { hasAccountViews, hasAccountReach };
 }
 
 function isWithinLastDays(dateLike, days) {
@@ -504,13 +522,34 @@ function isWithinLastDays(dateLike, days) {
   return time >= Date.now() - days * 86400000;
 }
 
-function renderOverviewViewsFromMedia(mediaArr) {
+function renderOverviewViewsFromMedia(mediaArr, allowFallback = false) {
+  if (!allowFallback) return;
+
   const recentMedia = mediaArr.filter(m => isWithinLastDays(m.timestamp, 7));
   const viewsTotal = recentMedia.reduce((sum, media) => sum + getMediaStats(media).views, 0);
 
   if (viewsTotal > 0) {
     document.getElementById('kpi-impressions').textContent = fmt(viewsTotal);
-    document.getElementById('kpi-impressions-delta').textContent = `dari ${recentMedia.length} konten terbaru`;
+    document.getElementById('kpi-impressions-delta').textContent = `fallback dari ${recentMedia.length} konten 7 hari`;
+  } else {
+    document.getElementById('kpi-impressions-delta').textContent = 'views konten tidak tersedia';
+  }
+}
+
+function renderOverviewReachFromMedia(mediaArr, allowFallback = false) {
+  if (!allowFallback) return;
+
+  const recentMedia = mediaArr.filter(m => isWithinLastDays(m.timestamp, 7));
+  const reachTotal = recentMedia.reduce((sum, media) => sum + getMediaStats(media).reach, 0);
+
+  if (reachTotal > 0) {
+    const pctVal = Math.min(100, Math.round((reachTotal / config.targetReach) * 100));
+    document.getElementById('kpi-reach').textContent = fmt(reachTotal);
+    document.getElementById('kpi-reach-delta').textContent = `fallback dari ${recentMedia.length} konten 7 hari`;
+    document.getElementById('reach-pct').textContent = pctVal + '%';
+    document.getElementById('reach-bar').style.width = pctVal + '%';
+  } else {
+    document.getElementById('kpi-reach-delta').textContent = 'reach konten tidak tersedia';
   }
 }
 
@@ -544,9 +583,13 @@ function renderOverviewEngagement(mediaArr) {
   document.getElementById('er-by-views').textContent = formatRate(weighted.viewsEr);
   document.getElementById('er-by-followers').textContent = formatRate(weighted.followersEr);
   document.getElementById('kpi-save-rate').textContent = formatRate(weighted.saveRate);
-  document.getElementById('kpi-save-rate-sub').textContent = `${fmt(weighted.saves)} saves / ${fmt(weighted.reach)} reach`;
+  document.getElementById('kpi-save-rate-sub').textContent = weighted.reach > 0
+    ? `${fmt(weighted.saves)} saves / ${fmt(weighted.reach)} reach`
+    : 'reach konten tidak tersedia';
   document.getElementById('kpi-share-rate').textContent = formatRate(weighted.shareRate);
-  document.getElementById('kpi-share-rate-sub').textContent = `${fmt(weighted.shares)} shares / ${fmt(weighted.reach)} reach`;
+  document.getElementById('kpi-share-rate-sub').textContent = weighted.reach > 0
+    ? `${fmt(weighted.shares)} shares / ${fmt(weighted.reach)} reach`
+    : 'reach konten tidak tersedia';
 }
 
 function buildLast7Days() {
@@ -591,16 +634,24 @@ function readDemographicBreakdown(metric, desiredKeys) {
   return out;
 }
 
-function renderAudienceEmpty() {
+function renderGenderEmpty() {
   document.getElementById('demo-female').style.width = '0%';
   document.getElementById('demo-female-pct').textContent = '—';
   document.getElementById('demo-male').style.width = '0%';
   document.getElementById('demo-male-pct').textContent = '—';
+}
+
+function renderCitiesEmpty() {
   document.getElementById('demo-cities').innerHTML = `
     <div class="demo-item">
       <span class="demo-label" style="width:100%;font-size:10px;color:var(--text3)">Data audiens belum tersedia</span>
     </div>
   `;
+}
+
+function renderAudienceEmpty() {
+  renderGenderEmpty();
+  renderCitiesEmpty();
 }
 
 function renderAudience(insights) {
@@ -651,10 +702,10 @@ function renderAudience(insights) {
   if (city?.values?.[0]?.value) {
     const cd = city.values[0].value;
     const sorted = Object.entries(cd).sort((a, b) => b[1] - a[1]).slice(0, 3);
-    const total = sorted.reduce((s, [, v]) => s + v, 0) || 1;
+    const total = Object.values(cd).reduce((s, v) => s + readNumber(v), 0) || 1;
     document.getElementById('demo-cities').innerHTML = sorted.map(([name, val]) => `
       <div class="demo-item">
-        <span class="demo-label" style="width:60px;font-size:10px">${name.split(',')[0]}</span>
+        <span class="demo-label" style="width:60px;font-size:10px">${escapeHtml(name.split(',')[0])}</span>
         <div class="demo-bar-track"><div class="demo-bar-fill" style="width:${Math.round((val/total)*100)}%"></div></div>
         <span class="demo-pct">${Math.round((val/total)*100)}%</span>
       </div>
@@ -671,10 +722,10 @@ function renderAudience(insights) {
 
     const sorted = Object.entries(cityData).sort((a, b) => b[1] - a[1]).slice(0, 3);
     if (sorted.length) {
-      const total = sorted.reduce((s, [, v]) => s + v, 0) || 1;
+      const total = Object.values(cityData).reduce((s, v) => s + readNumber(v), 0) || 1;
       document.getElementById('demo-cities').innerHTML = sorted.map(([name, val]) => `
         <div class="demo-item">
-          <span class="demo-label" style="width:60px;font-size:10px">${name.split(',')[0]}</span>
+          <span class="demo-label" style="width:60px;font-size:10px">${escapeHtml(name.split(',')[0])}</span>
           <div class="demo-bar-track"><div class="demo-bar-fill" style="width:${Math.round((val/total)*100)}%"></div></div>
           <span class="demo-pct">${Math.round((val/total)*100)}%</span>
         </div>
@@ -683,9 +734,8 @@ function renderAudience(insights) {
     }
   }
 
-  if (!renderedGender && !renderedCity) {
-    renderAudienceEmpty();
-  }
+  if (!renderedGender) renderGenderEmpty();
+  if (!renderedCity) renderCitiesEmpty();
 }
 
 function getPostingTimeZoneInfo() {
@@ -734,12 +784,16 @@ function getPostTimeParts(timestamp, timeZone) {
 
 function renderHeatmap(mediaArr = []) {
   const hm = document.getElementById('heatmap');
-  const hourWrap = document.getElementById('heatmap-hours');
+  const dayWrap = document.getElementById('heatmap-days');
   const summary = document.getElementById('best-hour-summary');
   const zone = getPostingTimeZoneInfo();
   const hours = [6, 9, 12, 15, 18, 21];
   const days = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
   const scores = Array.from({ length: hours.length }, () => Array(7).fill(0));
+  const renderDayHeader = () => {
+    dayWrap.innerHTML = '<div class="heat-axis-spacer"></div>' +
+      days.map(day => `<div class="heat-day-label">${day}</div>`).join('');
+  };
 
   mediaArr.forEach(media => {
     const postTime = getPostTimeParts(media.timestamp, zone.timeZone);
@@ -756,8 +810,13 @@ function renderHeatmap(mediaArr = []) {
   if (!mediaArr.length || !scores.flat().some(Boolean)) {
     const fallback = [0,1,2,3,2,1,0, 1,2,3,4,3,2,1, 1,3,4,3,2,1,0, 0,1,2,3,4,3,2, 1,2,3,3,2,1,0, 0,1,2,3,4,3,2];
     const fallbackHours = [6, 9, 12, 15, 18, 21];
-    hourWrap.innerHTML = fallbackHours.map(h => `<div class="heat-hour-label">${String(h).padStart(2, '0')}</div>`).join('');
-    hm.innerHTML = fallback.map((l, i) => `<div class="heat-cell ${l > 0 ? 'h' + l : ''}">${String(fallbackHours[Math.floor(i / 7)]).padStart(2, '0')}</div>`).join('');
+    renderDayHeader();
+    hm.innerHTML = fallbackHours.map((hour, hourIndex) => (
+      `<div class="heat-hour-label">${String(hour).padStart(2, '0')}:00</div>` +
+      fallback.slice(hourIndex * 7, hourIndex * 7 + 7)
+        .map(l => `<div class="heat-cell ${l > 0 ? 'h' + l : ''}"></div>`)
+        .join('')
+    )).join('');
     summary.textContent = `18:00-21:00 ${zone.label}`;
     return;
   }
@@ -768,7 +827,7 @@ function renderHeatmap(mediaArr = []) {
   let bestHour = hours[0];
   let bestDay = days[0];
 
-  hourWrap.innerHTML = hours.map(h => `<div class="heat-hour-label">${String(h).padStart(2, '0')}</div>`).join('');
+  renderDayHeader();
   hm.innerHTML = scores.map((row, rowIndex) => row.map((score, dayIndex) => {
     if (score > bestScore) {
       bestScore = score;
@@ -777,8 +836,10 @@ function renderHeatmap(mediaArr = []) {
     }
     const level = Math.ceil((score / max) * 4);
     const label = String(hours[rowIndex]).padStart(2, '0');
-    return `<div class="heat-cell ${level > 0 ? 'h' + level : ''}" title="${days[dayIndex]} ${label}:00 ${zone.label}">${label}</div>`;
-  }).join('')).join('');
+    return `<div class="heat-cell ${level > 0 ? 'h' + level : ''}" title="${days[dayIndex]} ${label}:00 ${zone.label}"></div>`;
+  }).join('')).map((cells, rowIndex) => (
+    `<div class="heat-hour-label">${String(hours[rowIndex]).padStart(2, '0')}:00</div>${cells}`
+  )).join('');
 
   summary.textContent = `${bestDay} ${String(bestHour).padStart(2, '0')}:00 ${zone.label}`;
 }
@@ -825,7 +886,7 @@ function filterAndRenderMedia() {
     const sharesDisplay = shares !== null ? fmt(shares) : '—';
 
     return `
-      <div class="content-card" onclick="window.open('${m.permalink}','_blank')">
+      <div class="content-card" data-permalink="${escapeHtml(m.permalink || '')}">
         ${rank}
         ${anomaly ? `<span class="anomaly-badge ${anomaly.cls}">${anomaly.label}</span>` : ''}
         <div class="content-thumb">
@@ -833,7 +894,7 @@ function filterAndRenderMedia() {
           <span class="content-type-badge">${typeLabel}</span>
         </div>
         <div class="content-info">
-          <div class="content-caption">${caption}</div>
+          <div class="content-caption">${escapeHtml(caption)}</div>
           <div class="content-meta">
             <span class="content-metric"><span class="ico">❤️</span>${fmt(likes)}</span>
             <span class="content-metric"><span class="ico">💬</span>${fmt(comments)}</span>
@@ -858,6 +919,13 @@ function filterAndRenderMedia() {
       </div>
     `;
   }).join('');
+
+  container.querySelectorAll('.content-card[data-permalink]').forEach(card => {
+    card.addEventListener('click', () => {
+      const permalink = card.dataset.permalink;
+      if (permalink) window.open(permalink, '_blank', 'noopener');
+    });
+  });
 }
 
 function getMediaPerformanceScore(media) {
@@ -1347,9 +1415,9 @@ function renderInsights(profile, insightsData, mediaArr) {
         html: `
           <div class="insight-card combo-card">
             <div class="combo-kicker">Best Combo</div>
-            <div class="combo-title">${bestFormat.label} + ${bestType.label}</div>
-            <div class="combo-row"><span>Jadwal</span><strong>${bestSlot.label}</strong></div>
-            <div class="combo-row"><span>CTA</span><strong>${ctaText}</strong></div>
+            <div class="combo-title">${escapeHtml(bestFormat.label)} + ${escapeHtml(bestType.label)}</div>
+            <div class="combo-row"><span>Jadwal</span><strong>${escapeHtml(bestSlot.label)}</strong></div>
+            <div class="combo-row"><span>CTA</span><strong>${escapeHtml(ctaText)}</strong></div>
             <div class="combo-note">Kombinasi ini mengikuti pola weighted ER terbaik dari konten aktual.</div>
           </div>
         `,
@@ -1381,8 +1449,8 @@ function renderInsights(profile, insightsData, mediaArr) {
     <div class="insight-card">
       <div class="insight-icon ${i.cls}">${i.icon}</div>
       <div class="insight-text">
-        <div class="insight-title">${i.title}</div>
-        <div class="insight-desc">${i.desc}</div>
+        <div class="insight-title">${escapeHtml(i.title)}</div>
+        <div class="insight-desc">${escapeHtml(i.desc)}</div>
       </div>
     </div>
   `).join('');
@@ -1423,9 +1491,11 @@ async function loadAllData() {
     }));
 
     // Render
+    setDataMode('live');
     renderProfile(profile);
-    renderKPIs(insightsRaw.data || [], profile);
-    renderOverviewViewsFromMedia(mediaList);
+    const kpiState = renderKPIs(insightsRaw.data || [], profile);
+    renderOverviewViewsFromMedia(mediaList, !kpiState.hasAccountViews);
+    renderOverviewReachFromMedia(mediaList, !kpiState.hasAccountReach);
     renderAudience(audienceRaw.data || []);
     renderHeatmap(mediaList);
     renderMedia(mediaList);
@@ -1450,14 +1520,18 @@ async function loadAllData() {
 //  DEMO DATA (fallback when no token)
 // ════════════════════════════════════════════════
 function renderDemoData() {
+  setDataMode('demo');
   currentProfile = { followers_count: 24800 };
   document.getElementById('stat-followers').textContent = '24.8K';
   document.getElementById('stat-following').textContent = '312';
   document.getElementById('stat-posts').textContent = '187';
   document.getElementById('kpi-impressions').textContent = '186K';
+  document.getElementById('kpi-impressions-delta').textContent = 'mode demo';
   document.getElementById('kpi-reach').textContent = '72K';
+  document.getElementById('kpi-reach-delta').textContent = 'mode demo';
   document.getElementById('kpi-engagement').textContent = '4.2%';
   document.getElementById('kpi-new-followers').textContent = '+284';
+  document.getElementById('kpi-followers-sub').textContent = 'mode demo';
   document.getElementById('reach-pct').textContent = '72%';
   document.getElementById('reach-bar').style.width = '72%';
   document.getElementById('reach-target-lbl').textContent = 'Target: 100K';
@@ -1581,6 +1655,6 @@ if (config.token && config.accountId) {
 
 
 // Register service worker
-if ('serviceWorker' in navigator) {
+if (navigator.serviceWorker?.register) {
   navigator.serviceWorker.register('sw.js').catch(console.warn);
 }
